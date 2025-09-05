@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+   
+    <img src="logoSuspectWatch.PNG" alt="SuspectWatch Logo" style="width: 150px; height: auto; display: block; margin: 0 auto;">
+    <br>
+    <p1>
+        Need to find a suspect? Type in a description in the box on the left to search through every surveillance camera
+        in the city. The box on the right will show you the results of your search, if any.
+    </p1>
+    <br>
+    <br>
+    
+       
+    <label for="description">Description:</label><br>
+    <input type="text" id="description" name="description"><br>
+    <br>
+    <label for="timeframe">Timeframe:</label><br>
+    <input type="text" id="timeframe" name="timeframe">
+    <br>
+    <br>
+    <button id="searchForm" >Submit</button>
+    <!--input type="button" name="searchForm" id="searchForm" value="Submit"-->
+
+    <h1 id="debug">empty</h1>
+    <button id="startRecording">Start Recording</button>
+    <button id="stopRecording" disabled>Stop Recording</button>
+    <video id="videoPreview" autoplay playsinline></video>
+    <img id="displayedImage" style="display: none;" alt="Last Overlayed Image">
+
+    <div class="image-container" id="image-container"></div>
+    <!-- Add an img element to display the fetched image -->
+<script>
+        let mediaRecorder;
+        let chunks = [];
+
+        document.getElementById("startRecording").addEventListener("click", function() {
+            document.getElementById("debug").innerHTML = "Start button clicked";
+
+            if ('mediaDevices' in navigator && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" }  // Request the back camera
+                })
+                .then(stream => {
+                    document.getElementById("videoPreview").srcObject = stream;
+                    document.getElementById("debug").innerHTML = "Streaming started";
+                    console.log("Streaming started");
+
+                    mediaRecorder = new MediaRecorder(stream, {
+                        mimeType: 'video/webm'
+                    });
+
+                    document.getElementById("debug").innerHTML = "MediaRecorder initialized";
+                    console.log("MediaRecorder initialized");
+
+                    mediaRecorder.ondataavailable = event => {
+                        if (event.data.size > 0) {
+                            chunks.push(event.data);
+                            console.log("Data available: ", event.data);
+                        }
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        let blob = new Blob(chunks, { 'type': 'video/webm' });
+                        chunks = [];
+
+                        let formData = new FormData();
+                        formData.append('video', blob, 'recording.mov'); // Change the file name as needed
+
+                        console.log("Uploading video...");
+                        fetch('/upload-video', {
+                            method: 'POST',
+                            body: formData,
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            console.log("Video uploaded successfully:", data);
+                        })
+                        .catch(error => console.error('Error uploading video:', error));
+                        document.getElementById("debug").innerHTML = "Video uploaded";
+                    };
+
+                    mediaRecorder.start();
+                    console.log("Recording started");
+
+                    document.getElementById("stopRecording").disabled = false;
+                    document.getElementById("startRecording").disabled = true;
+                })
+                .catch(error => {
+                    console.error("Error accessing the camera", error);
+                    document.getElementById("debug").innerHTML = "Error accessing the camera";
+                });
+
+            } else {
+                console.log("MediaRecorder not supported");
+                alert("getUserMedia not supported on this browser/device.");
+            }
+        });
+
+        document.getElementById("stopRecording").addEventListener("click", function() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                console.log("Recording stopped");
+
+                document.getElementById("stopRecording").disabled = true;
+                document.getElementById("startRecording").disabled = false;
+            }
+        });
+
+        document.getElementById("searchForm").addEventListener("click", function() {
+            let description = document.getElementById('description').value;
+            let timeframe = document.getElementById('timeframe').value;
+            alert("worked");
+
+            alert(JSON.stringify({ description: description, timeframe: timeframe }));
+            
+
+            fetch('/process-input', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ description: description, timeframe: timeframe }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Success:', data);
+                alert(data);
+
+                const container = document.getElementById('image-container');
+                container.innerHTML = ''; // Clear previous images
+                
+                data.forEach(filename => {
+                    fetch(`../${filename}`)  // Adjusted the path to your images
+                        .then(response => response.blob())
+                        .then(blob => {
+                            const imageUrl = URL.createObjectURL(blob);
+                            const img = document.createElement('img');
+                            img.src = imageUrl;
+                            img.alt = filename;
+                            container.appendChild(img);
+                        })
+                        .catch(error => {
+                            console.error('Error fetching image:', error);
+                        });
+                });
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+        });
+            
+        document.getElementById('searchForm1').addEventListener('submit', function(event) {
+            alert("submitted form");
+            event.preventDefault();
+            let description = document.getElementById('description').value;
+            let timeframe = document.getElementById('timeframe').value;
+            alert(description);
+            fetch('/process-input', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ description: description, timeframe: timeframe }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Success:', data);
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+        });
+
+    </script>
+
+
+</body>
+
+</html>
